@@ -2,134 +2,167 @@ import streamlit as st
 import pandas as pd
 
 # ==========================================
-# ⚙️ CONFIGURATION & THEME SETUP
+# CONFIGURATION
 # ==========================================
 st.set_page_config(
-    page_title="Pre-Hackathon Developer Sandbox",
+    page_title="Sandbox",
     page_icon="🚀",
     layout="wide"
 )
 
-# Initialize a simulated in-memory session database if one doesn't exist
 if "mock_db" not in st.session_state:
     st.session_state.mock_db = [
-        {"team_name": "Team-Alpha", "user_name": "Alex", "topic": "🌿 Environment", "project_name": "Eco-Bin Sensor", "desc": "Alerts trucks when recycling bins are 90% full."},
-        {"team_name": "Team-Beta", "user_name": "Sam", "topic": "🏥 Health", "project_name": "Med-Remind Audio", "desc": "Voice alerts for senior citizens to take daily prescriptions."},
-        {"team_name": "Team-Gamma", "user_name": "Jordan", "topic": "📚 Education", "project_name": "SkillShare Portal", "desc": "Connects retired teachers with students needing free math tutoring."},
-        {"team_name": "Team-Delta", "user_name": "Taylor", "topic": "🐾 Animal Welfare", "project_name": "StraySafe Map", "desc": "Crowdsourced mapping tool to report stray animals to local shelters."},
-        {"team_name": "Team-Epsilon", "user_name": "Morgan", "topic": "🤖 Smart Cities", "project_name": "GridPulse Monitor", "desc": "Tracks street light power outages using community reporting."}
+        {"team_name": "Team-Alpha", "user_name": "Alex", "topic": "🌿 Environment", "project_name": "Eco-Bin Sensor", "desc": "Bin monitor."},
+        {"team_name": "Team-Beta", "user_name": "Sam", "topic": "🏥 Health", "project_name": "Med-Remind Audio", "desc": "Pill alerts."},
+        {"team_name": "Team-Gamma", "user_name": "Jordan", "topic": "📚 Education", "project_name": "SkillShare Portal", "desc": "Tutor app."},
+        {"team_name": "Team-Delta", "user_name": "Taylor", "topic": "🐾 Animal Welfare", "project_name": "StraySafe Map", "desc": "Shelter map."},
+        {"team_name": "Team-Epsilon", "user_name": "Morgan", "topic": "🤖 Smart Cities", "project_name": "GridPulse Monitor", "desc": "Grid tracker."}
     ]
 
 # ==========================================
-# 🔐 SIDEBAR: STUDENT PORTAL WORKSPACE
+# SIDEBAR
 # ==========================================
 with st.sidebar:
-    st.header("🔐 Student Portal")
-    st.write("Claim your workspace before completing any lessons.")
-    
-    student_id = st.text_input("Enter your assigned Student ID or Team Name:", placeholder="e.g., Student_101")
-    
+    st.header("🔐 Portal")
+    student_id = st.text_input("Enter ID:", placeholder="e.g., Student_101")
     if student_id:
-        st.success(f"🟢 Workspace Active: {student_id}")
-        st.write("Your session is fully authenticated to the cloud database.")
+        st.success(f"🟢 Active: {student_id}")
     else:
-        st.warning("⚠️ Please enter a Student ID to unlock database tracking attributes.")
+        st.warning("⚠️ Enter ID.")
 
 # ==========================================
-# 🗺️ MAIN INTERFACE NAVIGATION TABS
+# NAVIGATION TABS
 # ==========================================
-st.title("🚀 Pre-Hackathon Developer Sandbox")
-st.write("Use the navigation tabs below to hop between your course assignments and text-box lessons.")
+st.title("🚀 Sandbox App")
 
 app_mode = st.tabs([
-    "📝 Form Submission App", 
-    "📊 Data Viewer Dashboard", 
-    "🎨 UI Design & State", 
+    "📝 Form Submission", 
+    "📊 Data Dashboard", 
+    "🎨 UI State", 
     "📈 Data Charting", 
-    "🛠️ Universal Hack-Tools", 
+    "🛠️ Hack-Tools", 
     "📐 Layout Studio", 
-    "🎨 Media & Styling", 
+    "🎨 Media Lab", 
     "⚡ Advanced Logic",
-    "📊 Data Science Lab"
+    "📊 Data Science"
 ])
 
-# ==========================================
-# TAB 1: FORM SUBMISSION APP (Module 2)
-# ==========================================
+# TAB 1
 with app_mode[0]:
-    st.subheader("📝 Live Cloud Database Intake Form")
-    st.write("Fill out this form to practice transmitting variables safely to the remote cloud server tables.")
-    
-    with st.form("project_submission_form"):
-        topic_choice = st.selectbox(
-            "Select your Hackathon Topic Area:",
-            ["🌿 Environment", "🏥 Health", "📚 Education", "🐾 Animal Welfare", "🤖 Smart Cities"]
-        )
-        proj_name = st.text_input("Project / App Name:", placeholder="What are you calling your solution?")
-        proj_desc = st.text_area("Description:", placeholder="Describe how your app solves a problem in 1 sentence...")
-        
-        submit_btn = st.form_submit_with_button_label("Send Data ⚡")
-        
+    st.subheader("📝 Intake Form")
+    with st.form("project_form"):
+        topic_choice = st.selectbox("Track:", ["🌿 Environment", "🏥 Health", "📚 Education", "🐾 Animal Welfare", "🤖 Smart Cities"])
+        proj_name = st.text_input("App Name:")
+        proj_desc = st.text_area("Description:")
+        submit_btn = st.form_submit_with_button_label("Send ⚡")
         if submit_btn:
             if not student_id:
-                st.error("❌ Submission Failed! You must enter a Student ID or Team Name in the left sidebar first.")
+                st.error("❌ Need ID")
             elif not proj_name or not proj_desc:
-                st.error("❌ Submission Failed! Please fill out all form text fields before sending.")
+                st.error("❌ Fields empty")
             else:
-                new_record = {
-                    "team_name": student_id,
-                    "user_name": student_id,
-                    "topic": topic_choice,
-                    "project_name": proj_name,
-                    "desc": proj_desc
-                }
+                new_record = {"team_name": student_id, "user_name": student_id, "topic": topic_choice, "project_name": proj_name, "desc": proj_desc}
                 st.session_state.mock_db.insert(0, new_record)
-                st.success(f"🎉 Success! Data packet uploaded smoothly under identifier: **{student_id}**")
-                st.info("Head over to the next tab ('Data Viewer Dashboard') to check your record live!")
+                st.success("🎉 Sent!")
 
-# ==========================================
-# TAB 2: DATA VIEWER DASHBOARD (Module 2)
-# ==========================================
+# TAB 2
 with app_mode[1]:
-    st.subheader("📊 Live Data Viewer Dashboard")
-    st.write("This feed reads records directly out of our cloud tables. Look for your project below!")
-    
-    if len(st.session_state.mock_db) == 0:
-        st.info("The database is currently clear. Go to the Form Submission tab to write an entry.")
-    else:
-        for idx, entry in enumerate(st.session_state.mock_db):
-            with st.container():
-                st.markdown(f"### 📦 Record #{idx+1}: {entry['project_name']}")
-                st.markdown(f"**Submitted by:** `{entry['team_name']}` | **Official Track Tag:** **[{entry['topic']}]**")
-                st.write(f"*Solution Narrative:* {entry['desc']}")
-                st.markdown("---")
+    st.subheader("📊 Live Feed")
+    for idx, entry in enumerate(st.session_state.mock_db):
+        with st.container():
+            st.markdown(f"### 📦 #{idx+1}: {entry['project_name']}")
+            st.write(f"By: {entry['team_name']} | Track: {entry['topic']}")
+            st.write(f"Info: {entry['desc']}")
+            st.markdown("---")
 
-# ==========================================
-# TAB 3: UI DESIGN & STATE (Module 3)
-# ==========================================
+# TAB 3
 with app_mode[2]:
-    st.subheader("🎨 Understand Dynamic Application States")
-    st.write("An app changes its look based on variables. Slide the controls below to see it change live.")
-    
-    accent_color = st.selectbox("Choose a UI Accent Color:", ["Default Blue", "Alert Red", "Success Green"])
-    user_font_size = st.slider("Adjust Welcome Font Size:", min_value=16, max_value=32, value=20)
-    
+    st.subheader("🎨 Dynamic UI States")
+    accent_color = st.selectbox("Color:", ["Blue", "Red", "Green"])
+    user_font_size = st.slider("Font Size:", 16, 32, 20)
     st.markdown("---")
-    if accent_color == "Default Blue":
-        st.info(f"### <p style='font-size:{user_font_size}px;'>Welcome to your Dashboard</p>", unsafe_allow_html=True)
-    elif accent_color == "Alert Red":
-        st.error(f"### <p style='font-size:{user_font_size}px;'>🚨 CRITICAL SYSTEM NOTICE</p>", unsafe_allow_html=True)
-    elif accent_color == "Success Green":
-        st.success(f"### <p style='font-size:{user_font_size}px;'>✅ Application Online and Secure</p>", unsafe_allow_html=True)
+    if accent_color == "Blue":
+        st.info(f"### <p style='font-size:{user_font_size}px;'>Dashboard Blue</p>", unsafe_allow_html=True)
+    elif accent_color == "Red":
+        st.error(f"### <p style='font-size:{user_font_size}px;'>Alert Red</p>", unsafe_allow_html=True)
+    elif accent_color == "Green":
+        st.success(f"### <p style='font-size:{user_font_size}px;'>System Green</p>", unsafe_allow_html=True)
 
-# ==========================================
-# TAB 4: DATA CHARTING (Module 4)
-# ==========================================
+# TAB 4
 with app_mode[3]:
-    st.subheader("Data Analytics & Visualization")
-    st.write("Most winning hackathon apps don't just collect data—they show it beautifully.")
-    st.write("Imagine your app is tracking user survey feedback. Adjust the metric scores below:")
-    
+    st.subheader("📈 Charting Lab")
     col1, col2, col3 = st.columns(3)
     with col1:
-        score_a = st.number_input("Usability Score (1-10):
+        score_a = st.number_input("Usability (1-10):", 1, 10, 7)
+    with col2:
+        score_b = st.number_input("Design (1-10):", 1, 10, 6)
+    with col3:
+        score_c = st.number_input("Impact (1-10):", 1, 10, 8)
+    chart_data = {"Metric": ["Usability", "Design", "Impact"], "Score": [score_a, score_b, score_c]}
+    st.bar_chart(data=chart_data, x="Metric", y="Score")
+
+# TAB 5
+with app_mode[4]:
+    st.subheader("🧰 Toolkit")
+    filter_choice = st.selectbox("Filter Database:", ["All", "🌿 Environment", "🏥 Health", "📚 Education", "🐾 Animal Welfare", "🤖 Smart Cities"])
+    for project in st.session_state.mock_db:
+        if filter_choice == "All" or filter_choice in project["topic"]:
+            st.write(f"**{project['project_name']}** ({project['topic']})")
+    st.markdown("---")
+    system_load = st.slider("System Metric Level:", 0, 100, 45)
+    if system_load < 30:
+        st.success(f"💚 Safe ({system_load}%)")
+    elif system_load <= 70:
+        st.warning(f"⚠️ Warning ({system_load}%)")
+    else:
+        st.error(f"🚨 Critical ({system_load}%)")
+
+# TAB 6
+with app_mode[5]:
+    st.subheader("📐 Layout Studio")
+    col_layout = st.radio("Columns:", ["2 Columns", "3 Columns"])
+    if col_layout == "2 Columns":
+        c1, c2 = st.columns(2)
+        c1.info("Column 1")
+        c2.success("Column 2")
+    else:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Score", "92%")
+        c2.metric("Pings", "14")
+        c3.metric("Nodes", "450")
+    with st.expander("❓ View Details"):
+        st.write("Details text container.")
+        st.caption("🔒 Code: LAYOUT_MASTER_2026")
+
+# TAB 7
+with app_mode[6]:
+    st.subheader("🎨 Styling Media Lab")
+    st.markdown("**Bold** text and *italics* sample.")
+    st.info("Info box visual.")
+    st.success("Success box visual.")
+    graphic_choice = st.selectbox("Image Select:", ["Environment", "Health"])
+    if graphic_choice == "Environment":
+        img_url = "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=500"
+    else:
+        img_url = "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=500"
+    st.image(img_url, use_container_width=True)
+    st.caption(f"🔒 Asset: {graphic_choice.upper()}_OK")
+
+# TAB 8
+with app_mode[7]:
+    st.subheader("⚡ Advanced Logic")
+    scale_factor = st.slider("Scale Target:", 1, 1000, 250)
+    severity = st.radio("Severity Level multiplier:", [1, 2, 3])
+    total_impact_score = scale_factor * severity
+    st.metric(label="Calculated Impact Metric Score:", value=total_impact_score)
+    st.caption(f"🔒 Hash: CALC_SCORE_{total_impact_score}")
+
+# TAB 9
+with app_mode[8]:
+    st.subheader("📊 Data Science Challenge")
+    data_choice = st.radio("Choose the Actionable Option:", ["Option A: Vague text details.", "Option B: Max limit = 150, Spike = 40%"])
+    if "Option A" in data_choice:
+        st.error("❌ Try again.")
+    else:
+        st.success("✅ Good Data Science!")
+        st.caption("🔒 Certification Code: METRIC_SCOUT_2026")
