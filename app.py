@@ -55,7 +55,6 @@ with app_mode[0]:
         proj_name = st.text_input("App Name:")
         proj_desc = st.text_area("Description:")
         
-        # FIXED: Using the native submit button function to resolve the pink warning box
         submit_btn = st.form_submit_button("Send Data ⚡")
         
         if submit_btn:
@@ -84,12 +83,14 @@ with app_mode[2]:
     accent_color = st.selectbox("Color:", ["Blue", "Red", "Green"])
     user_font_size = st.slider("Font Size:", 16, 32, 20)
     st.markdown("---")
+    
+    # FIXED: Replaced st.info/st.error/st.success with st.markdown to cleanly handle HTML font styling safely
     if accent_color == "Blue":
-        st.info(f"### <p style='font-size:{user_font_size}px;'>Dashboard Blue</p>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color:#eff6ff; padding:15px; border-left:5px solid #3b82f6; border-radius:4px;'><p style='font-size:{user_font_size}px; color:#1e40af; margin:0; font-weight:bold;'>Dashboard Blue</p></div>", unsafe_allow_html=True)
     elif accent_color == "Red":
-        st.error(f"### <p style='font-size:{user_font_size}px;'>Alert Red</p>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color:#fef2f2; padding:15px; border-left:5px solid #ef4444; border-radius:4px;'><p style='font-size:{user_font_size}px; color:#991b1b; margin:0; font-weight:bold;'>Alert Red</p></div>", unsafe_allow_html=True)
     elif accent_color == "Green":
-        st.success(f"### <p style='font-size:{user_font_size}px;'>System Green</p>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color:#f0fdf4; padding:15px; border-left:5px solid #22c55e; border-radius:4px;'><p style='font-size:{user_font_size}px; color:#166534; margin:0; font-weight:bold;'>System Green</p></div>", unsafe_allow_html=True)
 
 # TAB 4
 with app_mode[3]:
