@@ -54,7 +54,10 @@ with app_mode[0]:
         topic_choice = st.selectbox("Track:", ["🌿 Environment", "🏥 Health", "📚 Education", "🐾 Animal Welfare", "🤖 Smart Cities"])
         proj_name = st.text_input("App Name:")
         proj_desc = st.text_area("Description:")
-        submit_btn = st.form_submit_with_button_label("Send ⚡")
+        
+        # FIXED: Using the native submit button function to resolve the pink warning box
+        submit_btn = st.form_submit_button("Send Data ⚡")
+        
         if submit_btn:
             if not student_id:
                 st.error("❌ Need ID")
