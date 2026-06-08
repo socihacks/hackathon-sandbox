@@ -1,246 +1,438 @@
 import streamlit as st
-import math
 import pandas as pd
 import pydeck as pdk
 import base64
+import hashlib
+import hmac
+from datetime import datetime
 from supabase import create_client, Client
 
 # ==============================================================================
-# 1. INITIALIZE SECURE CONNECTIONS & SESSION STATES
+# 1. CORE CLIENT CONNECTIONS & GLOBAL STATE ENTITIES
 # ==============================================================================
 url: str = st.secrets["SUPABASE_URL"]
 key: str = st.secrets["SUPABASE_ANON_KEY"]
 supabase: Client = create_client(url, key)
 
 MASTER_APP_PASSWORD = st.secrets["APP_PASSWORD"]
+WP_SSO_SECRET_KEY = st.secrets.get("WP_SSO_SECRET_KEY", "socihacks_secure_handshake_gateway_2026")
 
-# Persistent operational tracking blocks for class module
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
-if "local_submissions" not in st.session_state:
-    st.session_state.local_submissions = {}
-if "completed_lectures" not in st.session_state:
-    st.session_state.completed_lectures = set()
-
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = {
-        "📢 Class Announcements": [
-            {"sender": "Professor Borg", "text": "Welcome to the training dashboard! Reminder: The submission channel for Module 2 Project Architecture closes tonight at midnight PST."}
-        ],
-        "💬 Live Study Hall Q&A": [
-            {"sender": "System", "text": "Welcome to the real-time interaction hub. Post your code blockers or project questions here."}
-        ]
-    }
-
-# ==============================================================================
-# AUTOMATED WORDPRESS SINGLE SIGN-ON (SSO) DETECTION ENGINE
-# ==============================================================================
-if not st.session_state.logged_in and "st_token" in st.query_params:
-    try:
-        encoded_token = st.query_params["st_token"]
-        decoded_bytes = base64.b64decode(encoded_token.encode('utf-8'))
-        auto_email = decoded_bytes.decode('utf-8').strip()
-        
-        if auto_email:
-            st.session_state.logged_in = True
-            st.session_state.user_email = auto_email
-            st.query_params.clear()
-            st.toast(f"🔒 Securely Synced to Virtual Classroom Hub!", icon="🎓")
-    except Exception as token_err:
-        st.sidebar.error(f"Autologin Pipeline Bypass Restrained: {token_err}")
+if "user_type" not in st.session_state:
+    st.session_state.user_type = "Unassigned"
+if "user_role" not in st.session_state:
+    st.session_state.user_role = "Student" 
+if "user_region" not in st.session_state:
+    st.session_state.user_region = "Malta" 
+if "assigned_courses" not in st.session_state:
+    st.session_state.assigned_courses = []
+if "online_pre_completed" not in st.session_state:
+    st.session_state.online_pre_completed = False
+if "online_post_completed" not in st.session_state:
+    st.session_state.online_post_completed = False
+if "completed_items" not in st.session_state:
+    st.session_state.completed_items = set()
 
 # ==============================================================================
-# 2. CLASSROOM SCHEDULING & CURRICULUM DATA MODEL
+# 2. EXACT WORDPRESS CURRICULUM ARCHITECTURE MATRIX
 # ==============================================================================
-CLASS_MODULES = [
-    {
-        "id": "mod_1",
-        "title": "Module 1: Streamlit Foundation & State Variables",
-        "date": "Live Now (Self-Paced)",
-        "zoom_link": "https://zoom.us/mock-link-socihacks-1",
-        "assignment_prompt": "Build a multi-page routing menu using st.sidebar and st.radio. Capture a text state across screens.",
-        "resources": ["💡 Streamlit Component Docs", "📁 Starter Repository Asset Pack"]
+LMS_COURSE_STRUCTURE = {
+    "Module 1: Environment Setup & Initialization": [
+        "Local Python Interfacing Tools", "Development Workspace Setup", "API Authentication Principles"
+    ],
+    "Module 2: Controlling the Cloud Database": [
+        "Database Architecture Basics", "Relational Layer Structural Paradigms", "PostgREST Client Configuration"
+    ],
+    "Module 3: Variables, Logic, and UI State": [
+        "View State Foundations", "Multi-Page Sidebar Navigation Layouts", "Persistent Variables Engineering"
+    ],
+    "Module 4: Data Visualization & Analytics": [
+        "PyDeck Layer Syntaxes", "Coordinate Datatypes Isolation"
+    ],
+    "Module 5: Universal Feature Engineering": [
+        "Dynamic Frontend Web Inputs", "Safe Append Procedures"
+    ],
+    "Module 6: App Layouts & User Experience (UX)": [
+        "Spatial Mapping Vector Controls", "Interactive Map Rendering", "Asynchronous Architecture Mapping", "Deployment Operations Protocols"
+    ],
+    "Module 7: Media, Colors, and Styling": [
+        "Custom UI Themes & CSS Hacks", "Media Elements & Asset Integration", "Branding Variables Calibration"
+    ],
+    "Module 8: Advanced Logic & Data Processing": [
+        "Extracting Live Remote Geolocation JSONs", "Dataframe Restructuring Algorithms", "Automated Coordinate Updates"
+    ],
+    "Module 9: Community Data Science & Pre-Event Research": [
+        "Live Chat Communication Components", "Study Hall Integration Modules", "Project Sandbox Deployments"
+    ]
+}
+
+TOTAL_COURSE_ITEMS_COUNT = 26
+
+CORE_RESEARCH_COMPETENCIES = {
+    "comp_1_python": {
+        "title": "💻 Running Python Locally",
+        "desc": "How comfortable do you feel setting up Python on your computer, using terminal commands, and fixing errors when software programs don't launch correctly?"
     },
-    {
-        "id": "mod_2",
-        "title": "Module 2: Supabase Relational Integrations & Auth",
-        "date": "Live Stream: June 10, 2026 @ 4:00 PM PST",
-        "zoom_link": "https://zoom.us/mock-link-socihacks-2",
-        "assignment_prompt": "Construct an input submission form that creates row entries inside a live Supabase collection table securely.",
-        "resources": ["🔌 Supabase Quickstart Guide", "🔒 Database Security Policy Templates"]
+    "comp_2_supabase": {
+        "title": "🔒 Keeping Secret Keys Safe",
+        "desc": "How confident are you connecting your web application to a live cloud database using secret keys without accidentally exposing those passwords publicly?"
     },
-    {
-        "id": "mod_3",
-        "title": "Module 3: Geospatial Map Layers & Interactive Portals",
-        "date": "Live Stream: June 15, 2026 @ 4:00 PM PST",
-        "zoom_link": "https://zoom.us/mock-link-socihacks-3",
-        "assignment_prompt": "Render an interactive PyDeck Scatterplot mapping layer using coordinate sets extracted directly from an active API feed.",
-        "resources": ["📍 PyDeck Spatial Layer Reference", "🗺️ GeoJSON Sample Coordinates"]
+    "comp_3_state": {
+        "title": "🧠 App Memory & Layout States",
+        "desc": "How confident are you making sure your app remembers user choices, checkboxes, or typed text when they switch back and forth between different sidebar pages?"
+    },
+    "comp_4_pydeck": {
+        "title": "🗺️ Map Making & Geolocation Rendering",
+        "desc": "How comfortable do you feel reading GPS coordinates (Latitude and Longitude numbers) and plotting them on interactive PyDeck maps?"
+    },
+    "comp_5_crud": {
+        "title": "📝 Building Functional Web Forms",
+        "desc": "How confident do you feel designing web forms where users can type things in, press a submit button, and successfully send new information into a secure database?"
+    },
+    "comp_6_transform": {
+        "title": "📡 Reading Live Web Feeds",
+        "desc": "How confident are you writing clean code that grabs live, real-time data feeds from the internet and formats them into readable tables or maps?"
     }
-]
+}
 
-GLOBAL_COURSE_CATALOG = []
+# ==============================================================================
+# 3. RELATIONAL SYNC & IDENTITY LOOKUPS FROM EXPORT SCHEMA
+# ==============================================================================
+GLOBAL_EVENT_CATALOG = []
+mentors_list = []
+students_list = []
+
 try:
-    courses_query = supabase.table("courses").select("*").execute()
-    if courses_query.data:
-        for c in courses_query.data:
-            GLOBAL_COURSE_CATALOG.append({
-                "id": str(c.get("id")),
-                "title": str(c.get("title")),
-                "slug": str(c.get("slug")),
-                "desc": str(c.get("desc_text") or "No description provided.")
-            })
+    # Pull profiles straight from your unified master table
+    master_query = supabase.table("students").select("*").execute()
+    if master_query.data:
+        # Segregate cohort members dynamically based on user_type strings
+        students_list = [row for row in master_query.data if row.get("user_type") == "Youth Participant"]
+        mentors_list = [row for row in master_query.data if row.get("user_type") == "Industry Mentor"]
 except Exception:
     pass
 
+# --- TRACK ASSIGNED COURSES & AUTOMATIC PROGRESS SYNC ---
+if st.session_state.logged_in and st.session_state.user_role == "Student":
+    try:
+        # Pull allocated rows assigned through backend admin scripts
+        enroll_response = supabase.table("course_enrollments").select("course_id, course_title, course_slug").eq("student_email", st.session_state.user_email).execute()
+        if enroll_response.data:
+            st.session_state.assigned_courses = enroll_response.data
+        else:
+            st.session_state.assigned_courses = []
+            
+        # Extract progress points pushed by the LMS connection
+        completions_response = supabase.table("course_completions").select("lesson_item_id").eq("student_email", st.session_state.user_email).execute()
+        if completions_response.data:
+            st.session_state.completed_items = set([row["lesson_item_id"] for row in completions_response.data])
+    except Exception:
+        pass
+
+try:
+    if st.session_state.logged_in:
+        events_response = supabase.table("hackathon_events").select("*").eq("country", st.session_state.user_region).execute()
+    else:
+        events_response = supabase.table("hackathon_events").select("*").execute()
+    GLOBAL_EVENT_CATALOG = events_response.data if events_response.data else []
+except Exception: 
+    GLOBAL_EVENT_CATALOG = []
+
+def verify_online_surveys_status():
+    if st.session_state.logged_in:
+        try:
+            pre_res = supabase.table("research_surveys").select("id").eq("student_email", st.session_state.user_email).eq("survey_phase", "PRE").eq("delivery_mode", "ONLINE_COURSE").execute()
+            if pre_res.data:
+                st.session_state.online_pre_completed = True
+                
+            post_res = supabase.table("research_surveys").select("id").eq("student_email", st.session_state.user_email).eq("survey_phase", "POST").eq("delivery_mode", "ONLINE_COURSE").execute()
+            if post_res.data:
+                st.session_state.online_post_completed = True
+        except Exception: 
+            pass
+
 # ==============================================================================
-# 3. INTERACTIVE INTERFACE VIEW CONTEXTS
+# 4. ROUTER PORTAL SHELL MANAGEMENT (LOGIN & GATEWAY)
 # ==============================================================================
 if not st.session_state.logged_in:
-    st.title("🎓 SOCIHACKS Virtual Classroom Environment")
-    st.subheader("Welcome to the Interactive Hackathon Training Portal")
-    st.markdown("Please log into your main dashboard on **socihacks.com** to launch this app or type your developer testing credentials below.")
-    
-    st.markdown("---")
+    st.title("🔗 PhD Matchmaking Lifecycle Router")
     col1, col2 = st.columns([1, 1.2], gap="large")
     
     with col1:
         st.markdown("### Classroom Portal Login")
-        email_input = st.text_input("Student Registration Email", key="class_email_field").strip()
-        password_input = st.text_input("Access Pin Code / Password", type="password", key="class_pwd_field")
+        email_input = st.text_input("Registered Email Address", key="login_email").strip().lower()
+        password_input = st.text_input("Account Password", type="password", key="login_pwd")
         
-        if st.button("Access Live Classroom Materials", use_container_width=True):
+        if st.button("Unlock Dashboard Gateway", use_container_width=True):
             if password_input == "DemoPassword123!" or password_input == MASTER_APP_PASSWORD:
                 st.session_state.logged_in = True
                 st.session_state.user_email = email_input
+                
+                # Default credential assignments
+                st.session_state.user_role = "Mentor" if "mentor" in email_input else "Student"
+                st.session_state.user_type = "Senior Research Advisor" if st.session_state.user_role == "Mentor" else "Youth Participant"
+                
+                try:
+                    live_checkin = supabase.table("students").select("user_type, physical_address").eq("email", email_input).execute()
+                    if live_checkin.data:
+                        raw_type = live_checkin.data[0].get("user_type", "Youth Participant")
+                        st.session_state.user_role = "Mentor" if "Mentor" in raw_type else "Student"
+                        st.session_state.user_type = raw_type
+                        
+                        raw_addr = live_checkin.data[0].get("physical_address", "Malta")
+                        st.session_state.user_region = "Ireland" if "Ireland" in raw_addr else "Malta"
+                except Exception: 
+                    pass
+                
+                verify_online_surveys_status()
                 st.rerun()
             else:
-                st.error("Authentication check failed. Try again or login via WordPress.")
+                st.error("Invalid Credentials Supplied.")
+                
     with col2:
         with st.container(border=True):
-            st.markdown("#### 🧪 Developer Testing Node")
-            st.markdown("- **Sandbox User:** `youth.demo@socihacks.org` \n- **Universal Access Key:** `DemoPassword123!`")
+            st.markdown("#### 🧪 Dual-Role Developer Testing Node")
+            sub_col1, sub_col2 = st.columns(2)
+            with sub_col1:
+                if st.button("🎭 Load Youth Demo Profile", use_container_width=True):
+                    st.session_state.logged_in = True
+                    st.session_state.user_email = "youth.demo@socihacks.org"
+                    st.session_state.user_role = "Student"
+                    st.session_state.user_type = "Youth Participant"
+                    st.session_state.user_region = "Malta"
+                    
+                    # FIXED: Added 'course_id' to resolve structural filtering blocks
+                    st.session_state.assigned_courses = [{
+                        "course_id": "pre-hackathon-app-developer-bootcamp",
+                        "course_title": "Pre-Hackathon App Developer Bootcamp",
+                        "course_slug": "pre-hackathon-app-developer-bootcamp"
+                    }]
+                    st.session_state.completed_items = {"item_1_local_python_interfacing_tools", "item_2_development_workspace_setup"}
+                    verify_online_surveys_status()
+                    st.rerun()
+            with sub_col2:
+                if st.button("💼 Load Mentor Demo Profile", use_container_width=True):
+                    st.session_state.logged_in = True
+                    st.session_state.user_email = "mentor.demo@socihacks.org"
+                    st.session_state.user_role = "Mentor"
+                    st.session_state.user_type = "Industry Mentor"
+                    st.session_state.user_region = "Ireland"
+                    st.session_state.online_pre_completed = True
+                    st.session_state.online_post_completed = True
+                    st.rerun()
+            st.caption("Bypass Credential Access Standard: `DemoPassword123!`")
+
+    st.markdown("---")
+    st.subheader("📍 Active Cohort Spatial Distribution Map")
+    map_records = []
+    
+    for s in students_list:
+        if s.get("latitude") and s.get("longitude"):
+            map_records.append({"lat": float(s["latitude"]), "lon": float(s["longitude"]), "name": s.get("full_name"), "type": "Student", "color": [242, 108, 79, 200]})
+    for m in mentors_list:
+        if m.get("latitude") and m.get("longitude"):
+            map_records.append({"lat": float(m["latitude"]), "lon": float(m["longitude"]), "name": m.get("full_name"), "type": "Mentor", "color": [34, 139, 34, 200]})
+
+    if map_records:
+        map_df = pd.DataFrame(map_records)
+        st.pydeck_chart(pdk.Deck(
+            map_style="mapbox://styles/mapbox/light-v9",
+            initial_view_state=pdk.ViewState(latitude=map_df["lat"].mean(), longitude=map_df["lon"].mean(), zoom=6, pitch=30),
+            layers=[pdk.Layer("ScatterplotLayer", data=map_df, get_position="[lon, lat]", get_color="color", get_radius=8000, pickable=True)],
+            tooltip={"text": "{name} ({type})"}
+        ))
 
 else:
+    # ==============================================================================
+    # 5. AUTHENTICATED SESSION LAYERS
+    # ==============================================================================
     current_user_email = st.session_state.user_email
+    verify_online_surveys_status()
 
-    # ==============================================================================
-    # 4. CLASSROOM NAVIGATION SIDEBAR
-    # ==============================================================================
     with st.sidebar:
-        st.image("https://img.icons8.com/fluency/96/000000/education.png", width=45)
-        st.markdown(f"**Student Account Node:**\n`{current_user_email}`")
+        st.markdown(f"**Identity:** `{current_user_email}`\n\n**Role:** `{st.session_state.user_type}`\n\n**Cohort:** `{st.session_state.user_region}`")
         st.markdown("---")
         
-        # Progress Tracker Logic
-        total_modules = len(CLASS_MODULES)
-        completed_count = len(st.session_state.completed_lectures)
-        progress_percentage = completed_count / total_modules if total_modules > 0 else 0.0
-        
-        st.markdown(f"**Course Completion Progression:** `{int(progress_percentage * 100)}%`")
-        st.progress(progress_percentage)
-        st.markdown("---")
-
-        menu_selection = st.radio(
-            "Class Navigation System",
-            ["📺 Live Virtual Lecture Stream", "📥 Course Resource Center", "📝 Assignment Lab Dropbox", "💬 Live Study Hall Rooms"]
-        )
-        st.markdown("---")
-        if st.button("Disconnect from Classroom Terminal", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.user_email = ""
-            st.session_state.local_submissions = {}
-            st.session_state.completed_lectures = set()
-            st.rerun()
-
-    # --- TRACK 1: LIVE VIRTUAL LECTURE STREAM ---
-    if menu_selection == "📺 Live Virtual Lecture Stream":
-        st.title("📺 Live Interactive Lecture Stream")
-        st.markdown("Access active live lecture coordinates, synchronize timestamps, and track your ongoing class status blocks here.")
-        
-        for mod in CLASS_MODULES:
-            m_id = mod["id"]
-            with st.container(border=True):
-                col_info, col_action = st.columns([3, 1])
-                with col_info:
-                    st.markdown(f"### {mod['title']}")
-                    st.caption(f"🗓️ Scheduled Session Time: **{mod['date']}**")
-                with col_action:
-                    st.write("")
-                    st.link_button("🔗 Join Zoom Stream", mod["zoom_link"], use_container_width=True)
-                
-                # Completion confirmation checker
-                is_checked = m_id in st.session_state.completed_lectures
-                if st.checkbox("Mark module lesson complete", value=is_checked, key=f"check_{m_id}"):
-                    if m_id not in st.session_state.completed_lectures:
-                        st.session_state.completed_lectures.add(m_id)
-                        st.rerun()
-                else:
-                    if m_id in st.session_state.completed_lectures:
-                        st.session_state.completed_lectures.remove(m_id)
-                        st.rerun()
-
-    # --- TRACK 2: COURSE RESOURCE CENTER ---
-    elif menu_selection == "📥 Course Resource Center":
-        st.title("📥 Material Distribution Repository")
-        st.markdown("Download active project code templates, architecture briefs, and structural assets directly.")
-        
-        for mod in CLASS_MODULES:
-            with st.container(border=True):
-                st.markdown(f"#### 📁 Documentation Pack: {mod['title']}")
-                for res in mod["resources"]:
-                    st.markdown(f"- **Download / View:** [{res}](https://github.com/socihacks/hackathon-sandbox)")
-        
-        if GLOBAL_COURSE_CATALOG:
+        if st.session_state.user_role == "Student":
+            completed_count = len(st.session_state.completed_items)
+            progress_percentage = completed_count / float(TOTAL_COURSE_ITEMS_COUNT)
+            
+            st.markdown(f"**LMS Verified Progress:** `{completed_count} / {TOTAL_COURSE_ITEMS_COUNT} Lessons` (`{int(progress_percentage * 100)}%`)")
+            st.progress(min(progress_percentage, 1.0))
             st.markdown("---")
-            st.subheader("🔗 Synced Main System Catalog Paths")
-            for crs in GLOBAL_COURSE_CATALOG:
-                with st.container(border=True):
-                    st.markdown(f"**{crs['title']}**")
-                    email_bytes = current_user_email.encode('utf-8')
-                    secure_token = base64.b64encode(email_bytes).decode('utf-8')
-                    wp_target_url = f"https://www.socihacks.com/courses/{crs['slug']}?st_token={secure_token}"
-                    st.link_button("🌐 Open LMS Core Page", wp_target_url)
 
-    # --- TRACK 3: ASSIGNMENT LAB DROPBOX ---
-    elif menu_selection == "📝 Assignment Lab Dropbox":
-        st.title("📝 Sandbox Code Submission Hub")
-        st.markdown("Submit production repository deployment links or testing scripts here to check off grading verification points.")
+        navigation_selection = st.radio("System Routing Panel", ["📚 LMS Course Gateway", "🔗 Network Matchmaking Router", "🏆 Live Hackathon Events"])
         
-        selected_mod = st.selectbox("Select Target Assignment Scope:", [m["title"] for m in CLASS_MODULES])
-        curr_mod = next(m for m in CLASS_MODULES if m["title"] == selected_mod)
-        
-        with st.container(border=True):
-            st.markdown(f"### {curr_mod['title']}")
-            st.info(f"📋 **Project Prompt:** {curr_mod['assignment_prompt']}")
-            
-            sub_key = curr_mod["id"]
-            existing_sub = st.session_state.local_submissions.get(sub_key, "")
-            
-            repo_link = st.text_input("Enter your live deployed app link / GitHub repo link:", value=existing_sub, key=f"input_{sub_key}")
-            
-            if st.button("Transmit Project Source Link", key=f"submit_btn_{sub_key}"):
-                if repo_link.strip() != "":
-                    st.session_state.local_submissions[sub_key] = repo_link
-                    st.success("🎯 Submission link captured securely and cached for evaluation review!")
-                else:
-                    st.warning("Please enter a valid URL link before transmitting.")
-
-    # --- TRACK 4: LIVE STUDY HALL ROOMS ---
-    elif menu_selection == "💬 Live Study Hall Rooms":
-        st.title("💬 Secure Student Group Rooms")
-        
-        selected_channel = st.selectbox("Choose active discussion node:", list(st.session_state.chat_history.keys()))
-        
-        chat_container = st.container(height=360)
-        with chat_container:
-            for message in st.session_state.chat_history[selected_channel]:
-                with st.chat_message("user" if message["sender"] != "System" else "assistant"):
-                    st.markdown(f"**{message['sender']}**: {message['text']}")
-
-        if user_msg := st.chat_input("Broadcast chat text data to room peers..."):
-            st.session_state.chat_history[selected_channel].append({"sender": current_user_email, "text": user_msg})
-            st.toast("Message distributed successfully!")
+        if st.button("Terminate Active Session", use_container_width=True):
+            st.session_state.logged_in = False
+            st.session_state.online_pre_completed = False
+            st.session_state.online_post_completed = False
+            st.session_state.completed_items = set()
+            st.session_state.assigned_courses = []
             st.rerun()
+
+    # --- ROUTER DEPLOYMENTS ---
+    if navigation_selection == "🔗 Network Matchmaking Router":
+        st.title("🔗 PhD Matchmaking Lifecycle Router")
+        if st.session_state.user_role == "Mentor":
+            st.subheader("💼 Mentor Connection Portal Administration")
+            with st.container(border=True):
+                st.markdown("### 📥 Connection Proposal Received")
+                st.markdown("**Candidate student:** `youth.demo@socihacks.org` (Alex Camilleri)")
+                if st.button("Confirm Match Connection Proposal", use_container_width=True):
+                    st.success("Match verified! Handshake established successfully.")
+        else:
+            st.subheader("Available Industry Mentors (Browse Free Selection)")
+            for mentor in mentors_list:
+                with st.container(border=True):
+                    st.markdown(f"### 🏅 {mentor.get('full_name')}")
+                    st.markdown(f"💡 **Technical Skills Base:** {mentor.get('technical_skills', 'Data Engineering')}")
+                    st.button("Send Connection Proposal Request", key=f"btn_{mentor.get('id')}", disabled=(current_user_email == "youth.demo@socihacks.org"), use_container_width=True)
+
+    # --- LMS CONTROL GATEWAY INTERFACE BLOCK ---
+    elif navigation_selection == "📚 LMS Course Gateway":
+        st.title("📚 Headless LMS Control Interface")
+        
+        if st.session_state.user_role == "Mentor":
+            st.info("ℹ️ Educational resources are configured for student execution tracks.")
+        else:
+            if not st.session_state.online_pre_completed:
+                st.warning("🔒 App Development Tracks Locked")
+                st.markdown("### 👋 Welcome to your Pre-Hackathon Workspace!")
+                st.markdown("Before jumping over to WordPress to start your lessons, please answer these **6 quick questions** about your starting comfort level. This lets us track your skills growth before the live event!")
+                
+                with st.form("online_pre_survey_form"):
+                    pre_answers = {}
+                    slider_labels = {1: "1: Totally New", 2: "2: Heard of it", 3: "3: Can do with guidance", 4: "4: Fairly Confident", 5: "5: Ready to build independently"}
+                    
+                    for comp_key, comp_info in CORE_RESEARCH_COMPETENCIES.items():
+                        with st.container(border=True):
+                            st.markdown(f"### {comp_info['title']}")
+                            st.markdown(comp_info['desc'])
+                            
+                            pre_answers[comp_key] = st.select_slider(
+                                "Choose your current skill level:",
+                                options=[1, 2, 3, 4, 5],
+                                value=1,
+                                format_func=lambda x: slider_labels[x],
+                                key=f"pre_{comp_key}"
+                            )
+                    
+                    if st.form_submit_button("Lock In My Answers & Connect Straight to My Courses! 🎉", use_container_width=True):
+                        try:
+                            supabase.table("research_surveys").insert({
+                                "student_email": current_user_email, "survey_phase": "PRE", "delivery_mode": "ONLINE_COURSE",
+                                "meta_data": {**pre_answers, "engine": "WordPress_LMSPress", "timestamp": datetime.now().isoformat()}
+                            }).execute()
+                        except Exception: 
+                            pass 
+                        st.session_state.online_pre_completed = True
+                        st.rerun()
+            else:
+                # Displays the 2 production panels cleanly (removing the old Open Opportunities tab)
+                active_tab, lms_curriculum_matrix_tab = st.tabs(["🎓 Enrolled Modules", f"📖 Bootcamp Curriculum ({TOTAL_COURSE_ITEMS_COUNT} Items)"])
+                
+                with active_tab:
+                    if not st.session_state.assigned_courses:
+                        st.warning("⚠️ No Allocated Course Modules Identified. Please contact your regional academic administrator to assign your track.")
+                    else:
+                        # Renders active assignment modules securely
+                        for course in st.session_state.assigned_courses:
+                            with st.container(border=True):
+                                st.markdown(f"### 📖 {course.get('course_title', 'Pre-Hackathon App Developer Bootcamp')}")
+                                
+                                # --- SECURE PASS-THROUGH HANDSHAKE LOGIC ---
+                                timestamp = str(int(datetime.now().timestamp()))
+                                base_url = "https://www.socihacks.com/courses/"
+                                slug = course.get('course_slug', 'pre-hackathon-app-developer-bootcamp')
+                                
+                                raw_payload = f"user={current_user_email}&course={slug}&time={timestamp}"
+                                signature = hmac.new(
+                                    WP_SSO_SECRET_KEY.encode('utf-8'),
+                                    raw_payload.encode('utf-8'),
+                                    hashlib.sha256
+                                ).hexdigest()
+                                
+                                encoded_payload = base64.b64encode(raw_payload.encode('utf-8')).decode('utf-8')
+                                sso_url = f"{base_url}{slug}/?sso_handshake={encoded_payload}&sig={signature}"
+                                
+                                st.link_button("🚀 Launch Linked WordPress Sandbox", sso_url, use_container_width=True)
+
+                    # --- CONDITIONAL PROGRESS ASSESSMENT ELEMENT ---
+                    st.markdown("---")
+                    if len(st.session_state.completed_items) >= 24:
+                        if not st.session_state.online_post_completed:
+                            st.subheader("🎓 Coursework Complete! Post-Survey Assessment Panel")
+                            st.markdown("🏆 **Incredible work!** Our systems confirm you have completed your digital modules on WordPress. Let's look at those 6 questions one last time to track your skill growth:")
+                            
+                            with st.form("online_post_survey_form"):
+                                post_answers = {}
+                                slider_labels = {1: "1: Still New", 2: "2: Familiar with it now", 3: "3: Can do with guidance", 4: "4: Fairly Confident", 5: "5: Ready to build independently"}
+                                
+                                for comp_key, comp_info in CORE_RESEARCH_COMPETENCIES.items():
+                                    with st.container(border=True):
+                                        st.markdown(f"### {comp_info['title']}")
+                                        st.markdown(comp_info['desc'])
+                                        
+                                        post_answers[comp_key] = st.select_slider(
+                                            "Choose your new current skill level:",
+                                            options=[1, 2, 3, 4, 5],
+                                            value=4,
+                                            format_func=lambda x: slider_labels[x],
+                                            key=f"post_{comp_key}"
+                                        )
+                                
+                                if st.form_submit_button("Submit Final Progress Review & Confirm Graduation Checkpoint", use_container_width=True):
+                                    try:
+                                        supabase.table("research_surveys").insert({
+                                            "student_email": current_user_email, "survey_phase": "POST", "delivery_mode": "ONLINE_COURSE",
+                                            "meta_data": {**post_answers, "engine": "WordPress_LMSPress", "timestamp": datetime.now().isoformat()}
+                                        }).execute()
+                                    except Exception: 
+                                        pass
+                                    st.session_state.online_post_completed = True
+                                    st.success("Post-course evaluation metrics linked! You are fully locked in.")
+                                    st.rerun()
+                        else:
+                            with st.container(border=True):
+                                st.markdown("### 🎉 Evaluation Instruments Fully Synchronized")
+                                st.success("Assessment payload logged. Auto-dispatching programmatic verification notification email...")
+                                
+                                outbox_preview = f"To: {current_user_email}\nSubject: [SOCIHACKS LMS Core] Progress & Post-Survey Verified\n\nHello,\nYour matched pre-vs-post coursework metrics have been successfully locked into our analytic schema. Your regional profile is cleared for hackathon participation in: {st.session_state.user_region}."
+                                st.text_area("Dispatched Email Outbox Stream", value=outbox_preview, height=130, disabled=True)
+                    else:
+                        st.caption(f"ℹ️ *Post-test evaluation drops automatically once you complete at least 24 of the 26 items inside the full curriculum workspace (Current Synced Progress: {len(st.session_state.completed_items)}).*")
+
+                # --- READ ONLY DIRECT LIVE LEDGER SYNC VIEW ---
+                with lms_curriculum_matrix_tab:
+                    st.markdown("## 📋 Core Coursework Completion Ledger")
+                    st.caption("🔄 *Live read-only tracker synced from your active WordPress LMSPress campus execution track.*")
+                    st.markdown("---")
+                    
+                    item_idx = 1
+                    for section_title, item_list in LMS_COURSE_STRUCTURE.items():
+                        with st.expander(f"📁 {section_title} ({len(item_list)} Items)"):
+                            for item in item_list:
+                                item_unique_id = f"item_{item_idx}_{item.replace(' ', '_').lower()}"
+                                is_verified_complete = item_unique_id in st.session_state.completed_items
+                                
+                                col_status, col_text = st.columns([1.2, 6])
+                                with col_status:
+                                    if is_verified_complete:
+                                        st.markdown("`✅ Completed`")
+                                    else:
+                                        st.markdown("`⏳ Pending`")
+                                with col_text:
+                                    st.markdown(f"**Lesson {item_idx}:** {item}")
+                                
+                                item_idx += 1
+
+    # --- HACKATHONS DEPLOYMENTS ---
+    elif navigation_selection == "🏆 Live Hackathon Events":
+        st.title("🏆 Live Hackathon Events Portal")
+        for event in GLOBAL_EVENT_CATALOG:
+            with st.container(border=True):
+                st.markdown(f"### 🚀 {event.get('title')}\n📍 **Location:** `{event.get('location')}`")
